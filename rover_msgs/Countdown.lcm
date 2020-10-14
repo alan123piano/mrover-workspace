@@ -1,0 +1,5 @@
+package rover_msgs;
+
+struct Countdown {
+	int32_t num;
+}
