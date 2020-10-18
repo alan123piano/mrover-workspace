@@ -1,10 +1,11 @@
 import json
+import math
 import numpy as np
 import os
 import pandas as pd
 import random
 
-CONFIG_PATH = "..\..\config"
+CONFIG_PATH = "../../config/filter/simConfig.json"
 
 """ for root, dirs, files in os.walk(CONFIG_PATH):
     print("root = ", root)
@@ -17,19 +18,37 @@ CONFIG_PATH = "..\..\config"
     for name in files:
         print(name, " :: ", os.path.join(root, name)) """
 
-# INPUT:  clean [lat_deg, long_deg, speed, accel, bearing] in CSV format
-# OUTPUT: noisy [lat_deg, long_deg, speed, accel, bearing] in CSV format
-# Applies simple Gaussian noise < input.csv > output.csv
-# TODO: derive mu and sigma values from config/filter/sim as input
-#       use different mu/sigma values for each parameter
-def gaussian_noise_simulator(mu, sigma):
-    clean_signal = pd.read_csv("input.csv", header=None)
-    noise = np.random.normal(mu, sigma, clean_signal.shape)
-    signal = clean_signal + noise
-    signal.to_csv("output.csv", index=False)
+# TODO: Make everything into a class for easy export?
 
-# INPUT:  [lat_deg, long_deg, speed, accel, bearing] with Gaussian noise in CSV format
-# OUTPUT: [lat_deg, long_deg, speed, accel, bearing] with Gaussian noise & drift in CSV format
+# REQUIRES: CONFIG_PATH leads to a valid .json with sigma values
+# OUTPUT:   1d array corresponding to sigmas for [lat_deg, long_deg, speed, accel, bearing]
+def read_sigma_array():
+    with open(CONFIG_PATH) as f:
+        data = json.load(f)
+    return [data["gps_lat_stdev_meters"],
+            data["gps_long_stdev_meters"],
+            data["gps_vel_stdev_meters"],
+            data["imu_accel_stdev_meters"],
+            data["imu_bearing_stdev_degs"]]
+
+# INPUT:    sigma_array - float array which has same length as a row of input
+#               Each sigma_array value will apply Gaussian noise with that stdev
+#               on its corresponding column of input
+#           input_csv_path - points to .csv file
+#               Contains clean measurements of [lat_deg, long_deg, speed, accel,
+#               bearing]
+#           output_csv_path - points to .csv file
+# EFFECTS:  noisy [lat_deg, long_deg, speed, accel, bearing] written to file
+#           pointed to by output_csv_path
+def fileio_gaussian_noise(sigma_array, input_csv_path, output_csv_path):
+    clean_signal = pd.read_csv(input_csv_path, header=None)
+    noise = np.random.normal(0, sigma_array, clean_signal.shape)
+    signal = clean_signal + noise
+    signal.to_csv(output_csv_path, index=False, header=False)
+
+# TODO
+# REQUIRES: [lat_deg, long_deg, speed, accel, bearing] with Gaussian noise in CSV format
+# EFFECTS:  [lat_deg, long_deg, speed, accel, bearing] with Gaussian noise & drift in CSV format
 def drift_injection_simulator():
     # Convert meters to lat/long deg/min
     # Research questions:
@@ -37,7 +56,36 @@ def drift_injection_simulator():
     #   Is bearing impacted?
     print("Hello world")
 
+# This function will output stdev & mean of the Gaussian noise in output_csv_path relative
+# to input_csv_path in order to verify that gaussian noise injection is working correctly.
+# This function does not use Bessel's correction (https://en.wikipedia.org/wiki/Bessel%27s_correction)
+def test_gaussian_stats(input_csv_path, output_csv_path):
+    input = pd.read_csv(input_csv_path, header=None)
+    output = pd.read_csv(output_csv_path, header=None)
+    diff = output - input
+    rows = diff.shape[0]
+    cols = diff.shape[1]
+    exp_mu_values = []
+    exp_sigma_values = [] # experimental sigma values
+    for col in range(0, cols):
+        sum = 0
+        for row in range(0, rows):
+            sum += diff.at[row, col]
+        avg = sum / rows
+        sum_var = 0
+        for row in range(0, rows):
+            sum_var += pow(diff.at[row, col] - avg, 2)
+        stdev = math.sqrt(sum_var / rows)
+        exp_mu_values.append(avg)
+        exp_sigma_values.append(stdev)
+    return {"mu": exp_mu_values, "sigma": exp_sigma_values}
+
 def test():
-    gaussian_noise_simulator([-100, 0, 100, 200, 300], [1, 1, 1, 1, 1])
+    sigma_array = read_sigma_array()
+    print("Config sigma values:", sigma_array)
+    fileio_gaussian_noise(sigma_array, "input.csv", "output.csv")
+    test_stats = test_gaussian_stats("input.csv", "output.csv")
+    print(test_stats["mu"])
+    print(test_stats["sigma"])
 
 test()
