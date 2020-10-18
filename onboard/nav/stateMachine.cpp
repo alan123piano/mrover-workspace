@@ -99,9 +99,9 @@ void StateMachine::updateObstacleElements( double bearing, double distance )
 // Will call the corresponding function based on the current state.
 void StateMachine::run()
 {
+    publishNavState();
     if( isRoverReady() )
     {
-        publishNavState();
         mStateChanged = false;
         NavState nextState = NavState::Unknown;
 
@@ -109,7 +109,6 @@ void StateMachine::run()
         {
             nextState = NavState::Off;
             mPhoebe->roverStatus().currentState() = executeOff(); // turn off immediately
-            publishNavState();
             clear( mPhoebe->roverStatus().path() );
             if( nextState != mPhoebe->roverStatus().currentState() )
             {
@@ -350,11 +349,11 @@ NavState StateMachine::executeTurn()
     }
     // If we should drop a repeater and have not already, add last
     // point where connection was good to front of path and turn
-    if ( isAddRepeaterDropPoint() )
-    {
-        addRepeaterDropPoint();
-        return NavState::RadioRepeaterTurn;
-    }
+    // if ( isAddRepeaterDropPoint() )
+    // {
+    //     addRepeaterDropPoint();
+    //     return NavState::RadioRepeaterTurn;
+    // }
 
     Odometry& nextPoint = mPhoebe->roverStatus().path().front().odom;
     if( mPhoebe->turn( nextPoint ) )
@@ -386,11 +385,11 @@ NavState StateMachine::executeDrive()
 
     // If we should drop a repeater and have not already, add last
     // point where connection was good to front of path and turn
-    if ( isAddRepeaterDropPoint() )
-    {
-        addRepeaterDropPoint();
-        return NavState::RadioRepeaterTurn;
-    }
+    // if ( isAddRepeaterDropPoint() )
+    // {
+    //     addRepeaterDropPoint();
+    //     return NavState::RadioRepeaterTurn;
+    // }
 
     if( isObstacleDetected() && !isWaypointReachable( distance ) )
     {
